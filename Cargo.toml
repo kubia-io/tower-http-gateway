@@ -1,5 +1,5 @@
 [package]
-name = "tower-http-gateway-service"
+name = "tower-http-gateway"
 version = "0.1.0"
 edition = "2021"
 description = "Middleware that implements an Tower HTTP gateway / reverse proxy"
@@ -11,3 +11,8 @@ http = "0.2.7"
 pin-project-lite = "0.2.7"
 tower-layer = "0.3"
 tower-service = "0.3"
+
+[dev-dependencies]
+axum = { version = "0.5", default-features = false }
+hyper = { version = "0.14", features = ["full"] }
+tower = { version = "0.4.10", features = ["buffer", "util", "retry", "make", "timeout"] }

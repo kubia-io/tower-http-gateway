@@ -35,7 +35,7 @@ use http::{uri::Scheme, HeaderValue};
 /// Non-[`Copy`] type:
 ///
 /// ```rust
-/// use tower_http::gateway::ConnectionInfo;
+/// use tower_http_gateway::ConnectionInfo;
 ///
 /// struct SocketInfo {
 ///     ip: std::net::IpAddr,
@@ -54,7 +54,7 @@ use http::{uri::Scheme, HeaderValue};
 /// [`Copy`] type:
 ///
 /// ```rust
-/// use tower_http::gateway::ConnectionInfo;
+/// use tower_http_gateway::ConnectionInfo;
 ///
 /// #[derive(Copy, Clone)]
 /// struct SocketInfo {

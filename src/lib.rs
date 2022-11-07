@@ -10,7 +10,7 @@
 //!
 //! ```rust,no_run
 //! use axum::{error_handling::HandleError, http, Router};
-//! use tower_http::gateway::Gateway;
+//! use tower_http_gateway::Gateway;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = hyper::Client::new();
@@ -166,7 +166,7 @@ impl GatewayLayer {
     /// use axum::extract::connect_info::ConnectInfo;
     /// use std::net::SocketAddr;
     /// use tower::ServiceBuilder;
-    /// use tower_http::gateway::Gateway;
+    /// use tower_http_gateway::Gateway;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let gateway = ServiceBuilder::new()
@@ -280,7 +280,7 @@ impl<S> Gateway<S> {
     /// # Example
     ///
     /// ```rust
-    ///use tower_http::gateway::Gateway;
+    ///use tower_http_gateway::Gateway;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = hyper::Client::new();
@@ -310,7 +310,7 @@ impl<S> Gateway<S> {
     /// ```rust
     /// use axum::extract::connect_info::ConnectInfo;
     /// use std::net::SocketAddr;
-    /// use tower_http::gateway::Gateway;
+    /// use tower_http_gateway::Gateway;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = hyper::Client::new();
