@@ -529,7 +529,7 @@ impl std::ops::Deref for ObfuscatedIdentifier<'_> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        &*self.inner
+        &self.inner
     }
 }
 
