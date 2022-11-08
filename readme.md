@@ -2,7 +2,7 @@ Tower HTTP Gateway Service
 ---
 
 ![Main CI](https://github.com/kubia-io/tower-http-gateway/actions/workflows/main.yml/badge.svg)
-[![codecov](https://codecov.io/gh/kubia-io/tower-http-gateway-service/branch/main/graph/badge.svg?token=LH93B4Q3EW)](https://codecov.io/gh/kubia-io/tower-http-gateway-service)
+[![codecov](https://codecov.io/github/kubia-io/tower-http-gateway/branch/main/graph/badge.svg?token=LH93B4Q3EW)](https://codecov.io/gh/kubia-io/tower-http-gateway)
 
 Provides Tower middleware which implements a reverse proxy.
 
