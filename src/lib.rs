@@ -676,7 +676,7 @@ fn make_forwarded_header(
     }
     if let Some(host) = host.filter(|x| !x.is_empty()) {
         bytes.put_slice(b";host=");
-        util::put_token_or_quoted(&mut bytes, &host);
+        util::put_token_or_quoted(&mut bytes, host);
     }
     if let Some(scheme) = &connection_info.scheme {
         bytes.put_slice(b";proto=");

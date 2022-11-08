@@ -529,7 +529,7 @@ impl std::ops::Deref for ObfuscatedIdentifier<'_> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        &*self.inner
+        &self.inner
     }
 }
 
@@ -797,4 +797,3 @@ mod tests {
         assert!(ObfuscatedIdentifier::try_from("_a b").is_err());
     }
 }
-
