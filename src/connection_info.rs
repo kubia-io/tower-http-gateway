@@ -797,4 +797,3 @@ mod tests {
         assert!(ObfuscatedIdentifier::try_from("_a b").is_err());
     }
 }
-
