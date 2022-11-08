@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Middleware that implements an Tower HTTP gateway / reverse proxy"
 license = "MIT"
+rust-version = "1.56"
 
 [dependencies]
 bytes = "1"
