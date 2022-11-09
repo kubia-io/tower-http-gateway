@@ -119,20 +119,23 @@ mod util;
 ///
 /// See the [module docs](self) for more details.
 #[derive(Clone)]
-pub struct GatewayLayer<F = for<'a> fn(&'a http::Extensions) -> ConnectionInfo<'a>> {
-    remote: http::Uri,
+pub struct GatewayLayer<
+    R: UpstreamUriResolver,
+    F = for<'a> fn(&'a http::Extensions) -> ConnectionInfo<'a>,
+> {
+    remote: R,
     connection_info: F,
     use_x_forwarded: bool,
 }
 
-impl GatewayLayer {
+impl<R: UpstreamUriResolver> GatewayLayer<R> {
     /// Forwards requests to a given remote URI after modifying headers appropriately.
     ///
     /// Returns [`Err`] if the remote URI cannot have a path joined onto it (e.g. because it has an
     /// authority and no scheme).
-    pub fn new(remote: http::Uri) -> Result<Self, http::Error> {
+    pub fn new(remote: R) -> Result<Self, R::Error> {
         Ok(Self {
-            remote: validate_remote_uri(remote)?,
+            remote: remote.validate_init()?,
             connection_info: |_| ConnectionInfo::new(),
             use_x_forwarded: false,
         })
@@ -145,7 +148,7 @@ impl GatewayLayer {
     /// This is a convenience for `self.with_connection_info_fn(|ext| ext.get::<C>().into())`.
     pub fn with_connection_info<C>(
         self,
-    ) -> GatewayLayer<impl for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>>
+    ) -> GatewayLayer<R, impl for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>>
     where
         C: Send + Sync + 'static,
         for<'a> &'a C: Into<ConnectionInfo<'a>>,
@@ -180,8 +183,9 @@ impl GatewayLayer {
     ///
     /// [`axum::extract::connect_info::ConnectInfo`]:
     ///     https://docs.rs/axum/0.5/axum/extract/connect_info/struct.ConnectInfo.html
-    pub fn with_connection_info_fn<F>(self, f: F) -> GatewayLayer<F>
+    pub fn with_connection_info_fn<F>(self, f: F) -> GatewayLayer<R, F>
     where
+        R: UpstreamUriResolver,
         F: for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>,
     {
         GatewayLayer {
@@ -192,7 +196,10 @@ impl GatewayLayer {
     }
 }
 
-impl<F> GatewayLayer<F> {
+impl<F, R> GatewayLayer<R, F>
+where
+    R: UpstreamUriResolver,
+{
     /// Enables or disables the `X-Forwarded-*` headers on forwarded requests.
     ///
     /// If set to `true`, the forwarded request will have [`X-Forwarded-For`][],
@@ -229,8 +236,8 @@ impl<F> GatewayLayer<F> {
     }
 }
 
-impl<S, F: Clone> Layer<S> for GatewayLayer<F> {
-    type Service = Gateway<S, F>;
+impl<S, F: Clone, R: UpstreamUriResolver + Clone> Layer<S> for GatewayLayer<R, F> {
+    type Service = Gateway<S, R, F>;
 
     fn layer(&self, inner: S) -> Self::Service {
         Gateway {
@@ -246,26 +253,30 @@ impl<S, F: Clone> Layer<S> for GatewayLayer<F> {
 ///
 /// See the [module docs](self) for more details.
 #[derive(Clone)]
-pub struct Gateway<S, F = for<'a> fn(&'a http::Extensions) -> ConnectionInfo<'a>> {
+pub struct Gateway<
+    S,
+    R: UpstreamUriResolver,
+    F = for<'a> fn(&'a http::Extensions) -> ConnectionInfo<'a>,
+> {
     inner: S,
     /// The URI for the backend server.
     ///
     /// Invariant: This URI is guaranteed to have a path already and therefore is safe to join a
     /// path to. It also has no query.
-    remote: http::Uri,
+    remote: R,
     connection_info: F,
     use_x_forwarded: bool,
 }
 
-impl<S> Gateway<S> {
+impl<S, R: UpstreamUriResolver> Gateway<S, R> {
     /// Creates a new `Gateway` that forwards requests to a given remote URI.
     ///
     /// Returns [`Err`] if the remote URI cannot have a path joined onto it (e.g. because it has an
     /// authority and no scheme).
-    pub fn new(inner: S, remote: http::Uri) -> Result<Self, http::Error> {
+    pub fn new(inner: S, remote: R) -> Result<Self, R::Error> {
         Ok(Self {
             inner,
-            remote: validate_remote_uri(remote)?,
+            remote: remote.validate_init()?,
             connection_info: |_| ConnectionInfo::new(),
             use_x_forwarded: false,
         })
@@ -290,7 +301,7 @@ impl<S> Gateway<S> {
     /// ```
     pub fn with_connection_info<C>(
         self,
-    ) -> Gateway<S, impl for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>>
+    ) -> Gateway<S, R, impl for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>>
     where
         C: Send + Sync + 'static,
         for<'a> &'a C: Into<ConnectionInfo<'a>>,
@@ -321,7 +332,7 @@ impl<S> Gateway<S> {
     ///
     /// [`axum::extract::connect_info::ConnectInfo`]:
     ///     https://docs.rs/axum/0.5/axum/extract/connect_info/struct.ConnectInfo.html
-    pub fn with_connection_info_fn<F>(self, f: F) -> Gateway<S, F>
+    pub fn with_connection_info_fn<F>(self, f: F) -> Gateway<S, R, F>
     where
         F: for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>,
     {
@@ -334,14 +345,14 @@ impl<S> Gateway<S> {
     }
 }
 
-impl Gateway<()> {
+impl<R: UpstreamUriResolver> Gateway<(), R> {
     /// Returns a new [`Layer`] that wraps services with a [`GatewayLayer`] middleware.
-    pub fn layer(remote: http::Uri) -> Result<GatewayLayer, http::Error> {
+    pub fn layer(remote: R) -> Result<GatewayLayer<R>, R::Error> {
         GatewayLayer::new(remote)
     }
 }
 
-impl<S, F> Gateway<S, F> {
+impl<S, R: UpstreamUriResolver, F> Gateway<S, R, F> {
     /// Enables or disables the `X-Forwarded-*` headers on forwarded requests.
     ///
     /// If set to `true`, the forwarded request will have [`X-Forwarded-For`][],
@@ -393,9 +404,10 @@ impl<S, F> Gateway<S, F> {
     }
 }
 
-impl<S, F, ReqBody, ResBody> Service<http::Request<ReqBody>> for Gateway<S, F>
+impl<S, R, F, ReqBody, ResBody> Service<http::Request<ReqBody>> for Gateway<S, R, F>
 where
     S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>>,
+    R: UpstreamUriResolver,
     F: for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>,
     ResBody: Default,
 {
@@ -424,7 +436,21 @@ where
             };
         }
 
-        let uri = uri_join(&self.remote, req.uri());
+        let uri = match self.remote.resolve_upstream_uri(&mut req) {
+            Ok(uri) => uri,
+            Err(_) => {
+                let mut res = http::Response::default();
+                *res.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+                update_response_headers(&mut res); // just in case this is useful later
+                return ResponseFuture {
+                    kind: Kind::Error {
+                        response: Some(res),
+                    },
+                };
+            }
+        };
+
+        let uri = uri_join(uri, req.uri());
         self.update_request_headers(&mut req);
         *req.uri_mut() = uri;
         // Reset request version back to the default (HTTP/1.1), so the version used for the
@@ -438,8 +464,9 @@ where
     }
 }
 
-impl<S, F> Gateway<S, F>
+impl<S, R, F> Gateway<S, R, F>
 where
+    R: UpstreamUriResolver,
     F: for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>,
 {
     /// Updates the headers in the request as needed for forwarding.
@@ -844,7 +871,39 @@ where
     }
 }
 
-impl<F> fmt::Debug for GatewayLayer<F> {
+/// Handles upstream Uri lookups based on a given request.
+pub trait UpstreamUriResolver: Sized {
+    type Error;
+
+    fn validate_init(self) -> Result<Self, Self::Error> {
+        Ok(self)
+    }
+
+    fn resolve_upstream_uri<B>(
+        &mut self,
+        req: &mut http::Request<B>,
+    ) -> Result<&http::Uri, Self::Error>;
+}
+
+impl UpstreamUriResolver for http::Uri {
+    type Error = http::Error;
+
+    fn validate_init(self) -> Result<Self, Self::Error> {
+        validate_remote_uri(self)
+    }
+
+    fn resolve_upstream_uri<B>(
+        &mut self,
+        _: &mut http::Request<B>,
+    ) -> Result<&http::Uri, Self::Error> {
+        Ok(self)
+    }
+}
+
+impl<F, R> fmt::Debug for GatewayLayer<R, F>
+where
+    R: UpstreamUriResolver + fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GatewayLayer")
             .field("remote", &self.remote)
@@ -857,7 +916,10 @@ impl<F> fmt::Debug for GatewayLayer<F> {
     }
 }
 
-impl<S: fmt::Debug, F> fmt::Debug for Gateway<S, F> {
+impl<S: fmt::Debug, R, F> fmt::Debug for Gateway<S, R, F>
+where
+    R: UpstreamUriResolver + fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Gateway")
             .field("remote", &self.remote)
