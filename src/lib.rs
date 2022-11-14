@@ -120,7 +120,7 @@ mod util;
 /// See the [module docs](self) for more details.
 #[derive(Clone)]
 pub struct GatewayLayer<
-    R: UpstreamUriResolver,
+    R: for<'a> UpstreamUriResolver<'a>,
     F = for<'a> fn(&'a http::Extensions) -> ConnectionInfo<'a>,
 > {
     remote: R,
@@ -128,12 +128,12 @@ pub struct GatewayLayer<
     use_x_forwarded: bool,
 }
 
-impl<R: UpstreamUriResolver> GatewayLayer<R> {
+impl<R: for <'a> UpstreamUriResolver<'a>> GatewayLayer<R> {
     /// Forwards requests to a given remote URI after modifying headers appropriately.
     ///
     /// Returns [`Err`] if the remote URI cannot have a path joined onto it (e.g. because it has an
     /// authority and no scheme).
-    pub fn new(remote: R) -> Result<Self, R::Error> {
+    pub fn new(remote: R) -> Result<Self, <R as UpstreamUriResolver<'static>>::Error> {
         Ok(Self {
             remote: remote.validate_init()?,
             connection_info: |_| ConnectionInfo::new(),
@@ -185,7 +185,7 @@ impl<R: UpstreamUriResolver> GatewayLayer<R> {
     ///     https://docs.rs/axum/0.5/axum/extract/connect_info/struct.ConnectInfo.html
     pub fn with_connection_info_fn<F>(self, f: F) -> GatewayLayer<R, F>
     where
-        R: UpstreamUriResolver,
+        for<'a> R: UpstreamUriResolver<'a>,
         F: for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>,
     {
         GatewayLayer {
@@ -198,7 +198,7 @@ impl<R: UpstreamUriResolver> GatewayLayer<R> {
 
 impl<F, R> GatewayLayer<R, F>
 where
-    R: UpstreamUriResolver,
+    for<'a> R: UpstreamUriResolver<'a>,
 {
     /// Enables or disables the `X-Forwarded-*` headers on forwarded requests.
     ///
@@ -236,7 +236,7 @@ where
     }
 }
 
-impl<S, F: Clone, R: UpstreamUriResolver + Clone> Layer<S> for GatewayLayer<R, F> {
+impl<S, F: Clone, R: for<'a> UpstreamUriResolver<'a> + Clone> Layer<S> for GatewayLayer<R, F> {
     type Service = Gateway<S, R, F>;
 
     fn layer(&self, inner: S) -> Self::Service {
@@ -255,7 +255,7 @@ impl<S, F: Clone, R: UpstreamUriResolver + Clone> Layer<S> for GatewayLayer<R, F
 #[derive(Clone)]
 pub struct Gateway<
     S,
-    R: UpstreamUriResolver,
+    R: for<'a> UpstreamUriResolver<'a>,
     F = for<'a> fn(&'a http::Extensions) -> ConnectionInfo<'a>,
 > {
     inner: S,
@@ -268,12 +268,12 @@ pub struct Gateway<
     use_x_forwarded: bool,
 }
 
-impl<S, R: UpstreamUriResolver> Gateway<S, R> {
+impl<S, R: for<'a> UpstreamUriResolver<'a>> Gateway<S, R> {
     /// Creates a new `Gateway` that forwards requests to a given remote URI.
     ///
     /// Returns [`Err`] if the remote URI cannot have a path joined onto it (e.g. because it has an
     /// authority and no scheme).
-    pub fn new(inner: S, remote: R) -> Result<Self, R::Error> {
+    pub fn new(inner: S, remote: R) -> Result<Self, <R as UpstreamUriResolver<'static>>::Error> {
         Ok(Self {
             inner,
             remote: remote.validate_init()?,
@@ -345,14 +345,14 @@ impl<S, R: UpstreamUriResolver> Gateway<S, R> {
     }
 }
 
-impl<R: UpstreamUriResolver> Gateway<(), R> {
+impl<R: for<'a> UpstreamUriResolver<'a>> Gateway<(), R> {
     /// Returns a new [`Layer`] that wraps services with a [`GatewayLayer`] middleware.
-    pub fn layer(remote: R) -> Result<GatewayLayer<R>, R::Error> {
+    pub fn layer(remote: R) -> Result<GatewayLayer<R>, <R as UpstreamUriResolver<'static>>::Error> {
         GatewayLayer::new(remote)
     }
 }
 
-impl<S, R: UpstreamUriResolver, F> Gateway<S, R, F> {
+impl<S, R: for<'a> UpstreamUriResolver<'a>, F> Gateway<S, R, F> {
     /// Enables or disables the `X-Forwarded-*` headers on forwarded requests.
     ///
     /// If set to `true`, the forwarded request will have [`X-Forwarded-For`][],
@@ -407,7 +407,7 @@ impl<S, R: UpstreamUriResolver, F> Gateway<S, R, F> {
 impl<S, R, F, ReqBody, ResBody> Service<http::Request<ReqBody>> for Gateway<S, R, F>
 where
     S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>>,
-    R: UpstreamUriResolver,
+    R: for<'a> UpstreamUriResolver<'a>,
     F: for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>,
     ResBody: Default,
 {
@@ -450,7 +450,7 @@ where
             }
         };
 
-        let uri = uri_join(uri, req.uri());
+        let uri = uri_join(&uri, req.uri());
         self.update_request_headers(&mut req);
         *req.uri_mut() = uri;
         // Reset request version back to the default (HTTP/1.1), so the version used for the
@@ -466,7 +466,7 @@ where
 
 impl<S, R, F> Gateway<S, R, F>
 where
-    R: UpstreamUriResolver,
+    R: for<'a> UpstreamUriResolver<'a>,
     F: for<'a> FnMut(&'a http::Extensions) -> ConnectionInfo<'a>,
 {
     /// Updates the headers in the request as needed for forwarding.
@@ -872,7 +872,8 @@ where
 }
 
 /// Handles upstream Uri lookups based on a given request.
-pub trait UpstreamUriResolver: Sized {
+pub trait UpstreamUriResolver<'a, T = http::Uri>: Sized
+{
     type Error;
 
     fn validate_init(self) -> Result<Self, Self::Error> {
@@ -880,12 +881,13 @@ pub trait UpstreamUriResolver: Sized {
     }
 
     fn resolve_upstream_uri<B>(
-        &mut self,
+        &'a mut self,
         req: &mut http::Request<B>,
-    ) -> Result<&http::Uri, Self::Error>;
+    ) -> Result<T, Self::Error>
+    where T: 'a;
 }
 
-impl UpstreamUriResolver for http::Uri {
+impl<'a> UpstreamUriResolver<'a, &'a http::Uri> for http::Uri {
     type Error = http::Error;
 
     fn validate_init(self) -> Result<Self, Self::Error> {
@@ -893,16 +895,16 @@ impl UpstreamUriResolver for http::Uri {
     }
 
     fn resolve_upstream_uri<B>(
-        &mut self,
+        &'a mut self,
         _: &mut http::Request<B>,
-    ) -> Result<&http::Uri, Self::Error> {
+    ) -> Result<&'a http::Uri, Self::Error> {
         Ok(self)
     }
 }
 
 impl<F, R> fmt::Debug for GatewayLayer<R, F>
 where
-    R: UpstreamUriResolver + fmt::Debug,
+    for<'a> R: UpstreamUriResolver<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GatewayLayer")
@@ -918,7 +920,7 @@ where
 
 impl<S: fmt::Debug, R, F> fmt::Debug for Gateway<S, R, F>
 where
-    R: UpstreamUriResolver + fmt::Debug,
+    for<'a> R: UpstreamUriResolver<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Gateway")
