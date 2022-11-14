@@ -102,7 +102,7 @@ use std::{
     fmt::{self, Write},
     future::Future,
     net::IpAddr,
-    task::Poll,
+    task::Poll, borrow::Cow,
 };
 
 use bytes::{BufMut, BytesMut};
@@ -450,7 +450,7 @@ where
             }
         };
 
-        let uri = uri_join(uri, req.uri());
+        let uri = uri_join(uri.as_ref(), req.uri());
         self.update_request_headers(&mut req);
         *req.uri_mut() = uri;
         // Reset request version back to the default (HTTP/1.1), so the version used for the
@@ -882,7 +882,7 @@ pub trait UpstreamUriResolver: Sized {
     fn resolve_upstream_uri<B>(
         &mut self,
         req: &mut http::Request<B>,
-    ) -> Result<&http::Uri, Self::Error>;
+    ) -> Result<Cow<http::Uri>, Self::Error>;
 }
 
 impl UpstreamUriResolver for http::Uri {
@@ -895,8 +895,8 @@ impl UpstreamUriResolver for http::Uri {
     fn resolve_upstream_uri<B>(
         &mut self,
         _: &mut http::Request<B>,
-    ) -> Result<&http::Uri, Self::Error> {
-        Ok(self)
+    ) -> Result<Cow<http::Uri>, Self::Error> {
+        Ok(Cow::Borrowed(self))
     }
 }
 
