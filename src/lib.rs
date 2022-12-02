@@ -99,10 +99,11 @@
 //! [features]: https://doc.rust-lang.org/cargo/reference/features.html#the-features-section
 
 use std::{
+    borrow::Cow,
     fmt::{self, Write},
     future::Future,
     net::IpAddr,
-    task::Poll, borrow::Cow,
+    task::Poll,
 };
 
 use bytes::{BufMut, BytesMut};
@@ -110,6 +111,7 @@ use http::{header::HeaderName, HeaderValue};
 use pin_project_lite::pin_project;
 use tower_layer::Layer;
 use tower_service::Service;
+use tracing::{event, span, Level};
 
 mod connection_info;
 pub use connection_info::*;
@@ -438,10 +440,15 @@ where
 
         let uri = match self.remote.resolve_upstream_uri(&mut req) {
             Ok(uri) => uri,
-            Err(_) => {
+            Err(err) => {
                 let mut res = http::Response::default();
                 *res.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
                 update_response_headers(&mut res); // just in case this is useful later
+                event!(
+                    Level::ERROR,
+                    "Error resolving upstream uri of request: {:?}",
+                    err
+                );
                 return ResponseFuture {
                     kind: Kind::Error {
                         response: Some(res),
@@ -873,7 +880,7 @@ where
 
 /// Handles upstream Uri lookups based on a given request.
 pub trait UpstreamUriResolver: Sized {
-    type Error;
+    type Error: std::fmt::Debug;
 
     fn validate_init(self) -> Result<Self, Self::Error> {
         Ok(self)
