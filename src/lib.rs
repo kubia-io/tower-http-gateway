@@ -111,7 +111,7 @@ use http::{header::HeaderName, HeaderValue};
 use pin_project_lite::pin_project;
 use tower_layer::Layer;
 use tower_service::Service;
-use tracing::{event, span, Level};
+use tracing::{event, Level};
 
 mod connection_info;
 pub use connection_info::*;
